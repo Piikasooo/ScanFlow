@@ -1,0 +1,444 @@
+{
+  "name": "ScanFlow",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyDrQe9nX0m2Zm22J-8MjkOW1hR8f6C2FXg",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Проаналізуй це зображення чеку. Витягни дані та поверни ТІЛЬКИ валідний JSON. ВАЖЛИВО: Для кожного товару обери категорію виключно з цього списку: Продукти, Кафе та Ресторани, Авто та Транспорт, Дім та Побут, Здоров'я, Одяг та Взуття, Техніка, Розваги, Послуги, Інше. Якщо не підходить або не впевнений - став Інше. Структура JSON має бути такою: { \\\"date\\\": \\\"YYYY-MM-DD\\\", \\\"merchant\\\": \\\"Store Name\\\", \\\"currency\\\": \\\"UAH\\\", \\\"total_money\\\": \\\"0\\\", \\\"items\\\": [ { \\\"name\\\": \\\"Product Name\\\", \\\"category\\\": \\\"Category Name\\\", \\\"quantity\\\": 1, \\\"price\\\": 10.00, \\\"total\\\": 10.00 } ] }\"\n        },\n        {\n          \"inline_data\": {\n            \"mime_type\": \"{{ $('Code in JavaScript').item.json.mime_type }}\",\n            \"data\": \"{{ $('Code in JavaScript').item.json.image_base64 }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"response_mime_type\": \"application/json\"\n  }\n}",
+        "options": {}
+      },
+      "id": "bc644fdc-ddb3-46e6-a07c-8443a8149dd8",
+      "name": "Gemini AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        752,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Дістаємо \"сирий\" текст відповіді від Gemini\n// Перевіряємо, чи є взагалі відповідь\nif (!items[0].json.candidates || !items[0].json.candidates[0].content) {\n  throw new Error('Gemini не повернув коректну відповідь');\n}\n\nconst responseText = items[0].json.candidates[0].content.parts[0].text;\n\n// 2. Чистимо текст (іноді AI додає ```json на початку, прибираємо це)\nconst firstBrace = responseText.indexOf('{');\nconst lastBrace = responseText.lastIndexOf('}');\n\nif (firstBrace === -1) throw new Error('JSON не знайдено у відповіді');\n\nconst cleanJson = responseText.substring(firstBrace, lastBrace + 1);\n\n// 3. Парсимо (перетворюємо текст на об'єкт)\nlet parsedData;\ntry {\n  parsedData = JSON.parse(cleanJson);\n} catch (e) {\n  throw new Error('Помилка парсингу JSON: ' + e.message);\n}\n\n// 4. Повертаємо чисті дані\nreturn {\n  json: {\n    date: parsedData.date,\n    merchant: parsedData.merchant || parsedData.store || 'Unknown',\n    currency: parsedData.currency || 'UAH',\n    total_ticket: parsedData.total_money,\n    items: parsedData.items || []\n  }\n};"
+      },
+      "id": "60e80af1-b4f3-42dd-9cd5-68f18a48e3c2",
+      "name": "Code Parser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = items[0];\nconst binaryObject = item.binary || {};\nconst keys = Object.keys(binaryObject);\n\nif (keys.length === 0) throw new Error('Нічого не отримано! Перевірте Webhook.');\n\nlet imageKey = null;\nlet textKey = null;\n\n// Перебираємо всі отримані \"файли\"\nfor (const key of keys) {\n  const fileData = binaryObject[key];\n  const mime = fileData.mimeType || '';\n  const fileName = fileData.fileName || '';\n\n  // 1. Чи схоже це на картинку? (має \"image\" у типі або розширення jpg/png)\n  if (mime.includes('image') || fileName.includes('.jpg') || fileName.includes('.png') || key === 'data') {\n    imageKey = key;\n  } \n  // 2. Якщо це не картинка — значить це наш chat_id (текстовий файл)\n  else {\n    textKey = key;\n  }\n}\n\n// --- Обробка КАРТИНКИ ---\nif (!imageKey) {\n    // Якщо не знайшли явно, беремо перший ліпший, а другий (якщо є) буде текстом\n    imageKey = keys[0];\n    if (keys.length > 1) textKey = keys[1];\n}\n\nconst imageBuffer = await this.helpers.getBinaryDataBuffer(0, imageKey);\nconst base64String = imageBuffer.toString('base64');\n\n// Визначаємо тип картинки\nlet finalMimeType = binaryObject[imageKey].mimeType;\nif (!finalMimeType || finalMimeType === 'application/octet-stream') {\n    finalMimeType = 'image/jpeg';\n}\n\n// --- Обробка CHAT_ID ---\nlet chatId = \"000000000\"; // Фолбек\n\nif (textKey) {\n   // Читаємо \"файл\" з ID\n   const textBuffer = await this.helpers.getBinaryDataBuffer(0, textKey);\n   chatId = textBuffer.toString('utf8').trim(); // trim прибирає зайві пробіли\n} else {\n   // Якщо n8n запхав все в один файл або ми не знайшли textKey, \n   // спробуємо пошукати в body, хоча воно і пусте (на майбутнє)\n   if (item.json.body && item.json.body.chat_id) chatId = item.json.body.chat_id;\n}\n\nreturn {\n  json: {\n    image_base64: base64String,\n    mime_type: finalMimeType,\n    chat_id: chatId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        160
+      ],
+      "id": "46489245-11ed-40ce-bbc4-7272636aff64",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scan-receipt",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryPropertyName": "data",
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        336,
+        32
+      ],
+      "id": "e214d757-3943-44f4-abff-83013d990ce2",
+      "name": "Webhook",
+      "webhookId": "30f903c6-7448-44be-add3-7e7350880674"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=✅ Чек збережено!\nМагазин: {{ $('Code Parser').item.json.merchant }}\nДата: {{ $('Code Parser').item.json.date }}\nСума в чеку: {{ $('Code Parser').item.json.total_ticket }}\n\nТовари додаються в базу... ⏳",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1232,
+        128
+      ],
+      "id": "6a992bde-add9-45c0-8669-d0728a89b6e5",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH new_family AS (\n  INSERT INTO families (name)\n  SELECT 'My Family'\n  WHERE NOT EXISTS (SELECT 1 FROM families)\n  RETURNING id\n),\nexisting_family AS (\n  SELECT id FROM families LIMIT 1\n)\nINSERT INTO users (telegram_id, first_name, family_id)\nSELECT \n  CAST('{{ $('Code in JavaScript').item.json.chat_id }}' AS BIGINT), \n  'User',\n  COALESCE((SELECT id FROM new_family), (SELECT id FROM existing_family))\nON CONFLICT (telegram_id) DO NOTHING;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        608,
+        32
+      ],
+      "id": "eb07bbef-be23-41fb-8b1c-51afe7099792",
+      "name": "Ensure User Exists.",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- 1. Знаходимо або створюємо магазин\nWITH merchant_ref AS (\n  INSERT INTO merchants (name) \n  VALUES ('{{ $json.merchant.replace(/'/g, \"''\") }}') -- Тут теж краще додати replace про всяк випадок (наприклад, магазин McDonald's)\n  ON CONFLICT (name) DO UPDATE SET name = merchants.name\n  RETURNING id\n),\n-- 2. Отримуємо дані сім'ї користувача\nuser_info AS (\n  SELECT family_id \n  FROM users \n  WHERE telegram_id = CAST('{{ $('Code in JavaScript').item.json.chat_id }}' AS BIGINT)\n)\n-- 3. Створюємо сам чек\nINSERT INTO receipts (family_id, uploader_id, merchant_id, date, total_amount, currency, raw_text)\nSELECT \n  (SELECT family_id FROM user_info),           \n  CAST('{{ $('Code in JavaScript').item.json.chat_id }}' AS BIGINT), \n  (SELECT id FROM merchant_ref),               \n  CAST('{{ $json.date }}' AS DATE),            \n  '{{ $json.total_ticket }}',                                           \n  '{{ $json.currency }}',                      \n  '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'  -- <--- ОСЬ ТУТ ГОЛОВНЕ ВИПРАВЛЕННЯ\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1056,
+        208
+      ],
+      "id": "9e9f3be5-1111-4b11-8290-e8d0268b057a",
+      "name": "Create Receipt",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        -112
+      ],
+      "id": "a1a97864-99d7-48fb-950c-340657b2d196",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO receipt_items (receipt_id, category_id, name, quantity, price, total)\nVALUES (\n  -- ID чеку (тут апострофів не буває, залишаємо як є)\n  '{{ $json.receipt_id }}',\n\n  COALESCE(\n    -- ТУТ ДОДАЛИ REPLACE для категорії (Здоров'я -> Здоров''я)\n    (SELECT id FROM categories WHERE name = '{{ $json.items.category.replace(/'/g, \"''\") }}'), \n    (SELECT id FROM categories WHERE name = 'Інше')\n  ),\n\n  -- ТУТ ДОДАЛИ REPLACE для назви товару (про всяк випадок)\n  '{{ $json.items.name.replace(/'/g, \"''\") }}',\n  \n  -- Числа залишаємо без змін\n  {{ $json.items.quantity }},\n  {{ $json.items.price }},\n  {{ $json.items.total }}\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1696,
+        16
+      ],
+      "id": "f4322681-7791-4b6e-8cde-c7ace2b192e1",
+      "name": "Save Item",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1b13896e-eb7a-467f-afe2-b5cdaf965144",
+              "name": "receipt_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "c941ba79-9306-4dce-9efb-15bfdec57273",
+              "name": "items",
+              "value": "={{ $('Code Parser').item.json.items }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1392,
+        0
+      ],
+      "id": "f740a939-3b0d-42f3-a198-12a7c2da88f0",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2432,
+        80
+      ],
+      "id": "349235c6-4cff-41b4-9ffc-520b5d2e0986",
+      "name": "Send a text message",
+      "webhookId": "7a0155a9-9385-42c3-a5fa-5e4f3bfe83c7",
+      "credentials": {
+        "telegramApi": {
+          "id": "Y3fBOX2ALtYlWDCF",
+          "name": "ScanFlowBot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Звертаємось назад у минуле — до ноди, де товари були ще списком\n// Використовуємо .first(), тому що Code Parser виконувався один раз\nconst originalData = $('Code Parser').first().json;\n\n// 2. Рахуємо довжину масиву items\nconst count = originalData.items ? originalData.items.length : 0;\n\n// 3. Беремо chat_id (він теж був відомий з самого початку)\nconst chatId = $('Code in JavaScript').first().json.chat_id;\n\nreturn {\n  json: {\n    message: `✅ Хух! Всі товари (${count} шт.) успішно додано в базу.`,\n    chat_id: chatId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        160
+      ],
+      "id": "ddfddbe9-361e-47d1-9da8-41331531f5e8",
+      "name": "Send finish",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a87840a0-4cb3-498f-93f7-6d42df5f8c27",
+              "leftValue": "={{ $execution.mode }}",
+              "rightValue": "test",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2128,
+        160
+      ],
+      "id": "b625cd8e-fccf-4d21-9a34-845e80d8909e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2432,
+        240
+      ],
+      "id": "84601cfd-3f4d-4086-8222-15b1f3902c33",
+      "name": "Send a text message1",
+      "webhookId": "7a0155a9-9385-42c3-a5fa-5e4f3bfe83c7",
+      "credentials": {
+        "telegramApi": {
+          "id": "YAfva1sFjs9TZXlk",
+          "name": "ScanFlowBot_test"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gemini AI": {
+      "main": [
+        [
+          {
+            "node": "Code Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Parser": {
+      "main": [
+        [
+          {
+            "node": "Create Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Ensure User Exists.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure User Exists.": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Receipt": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Save Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Item": {
+      "main": [
+        [
+          {
+            "node": "Send finish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send finish": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "460e9a85-f3f6-4520-88ec-30b747bee9e4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "004c26c8f91c40ef114f59a422a35b9672eb4e9a19bb1f9f188e83a3891a08ed"
+  },
+  "id": "KILgR5PP1JJUNpJp",
+  "tags": []
+}

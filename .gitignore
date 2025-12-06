@@ -1,0 +1,17 @@
+# Ігнорувати файли налаштувань з паролями
+.env
+.env.local
+
+# Ігнорувати системні папки Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Ігнорувати системні файли Mac/Windows
+.DS_Store
+Thumbs.db
+
+# Ігнорувати папку ідеї (якщо PyCharm)
+.idea/
+.vscode/
