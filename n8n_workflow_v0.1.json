@@ -4,7 +4,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyDrQe9nX0m2Zm22J-8MjkOW1hR8f6C2FXg",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -434,7 +434,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "460e9a85-f3f6-4520-88ec-30b747bee9e4",
+  "versionId": "cb71e007-d200-4874-bc3e-51ffdecc5d64",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "004c26c8f91c40ef114f59a422a35b9672eb4e9a19bb1f9f188e83a3891a08ed"
