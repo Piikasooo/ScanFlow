@@ -18,7 +18,7 @@ jobs:
           port: 22
           script: |
             # 1. Переходимо в папку проєкту
-            cd /root/scanflow
+            cd scanflow
             
             # 2. Скасовуємо локальні зміни (якщо раптом щось правили через nano)
             git stash
