@@ -19,6 +19,7 @@ services:
     environment:
       # ВАЖЛИВО: всередині Docker ми звертаємось до n8n по імені сервісу "n8n"
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/scan-receipt
+      - N8N_STAT_URL=http://n8n:5678/webhook/get-stats
       - BOT_TOKEN=${BOT_TOKEN}
 
 volumes:
