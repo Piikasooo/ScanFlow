@@ -102,7 +102,7 @@ async def cmd_stat(message: types.Message):
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    status_msg = await message.answer("⏳ Отримую фото та відправляю на аналіз...")
+    status_msg = await message.answer("⏳ Аналізую чек...")
 
     try:
         photo_id = message.photo[-1].file_id
@@ -116,14 +116,20 @@ async def handle_photo(message: types.Message):
         # Використовуємо глобальну сесію
         async with http_session.post(N8N_SCAN_URL, data=form_data) as response:
             if response.status == 200:
-                # n8n прийняв файл, далі він сам надішле повідомлення через Telegram node
-                await status_msg.edit_text("✅ Чек прийнято в чергу обробки!")
+                # Читаємо те, що відповів n8n у вузлі "Respond to Webhook"
+                server_text = await response.text()
+
+                # Якщо n8n повернув порожній текст, показуємо заглушку, інакше - текст від n8n
+                if not server_text.strip():
+                    await status_msg.edit_text("✅ Чек прийнято! Обробка триває...")
+                else:
+                    await status_msg.edit_text(server_text)
             else:
                 await status_msg.edit_text(f"❌ Помилка сервера n8n. Код: {response.status}")
 
     except Exception as e:
         logging.error(e)
-        await status_msg.edit_text(f"❌ Щось пішло не так: {e}")
+        await status_msg.edit_text(f"❌ Помилка: {e}")
 
 
 # --- ЗАПУСК ---
