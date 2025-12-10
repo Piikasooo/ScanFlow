@@ -54,3 +54,13 @@ CREATE TABLE receipt_items (
     price DECIMAL(10, 2),
     total DECIMAL(10, 2)
 );
+
+-- Оновлення v0.3: Запрошення
+CREATE TABLE invitations (
+    code UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+    inviter_id BIGINT REFERENCES users(telegram_id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    expires_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() + INTERVAL '24 hours',
+    is_used BOOLEAN DEFAULT FALSE
+);

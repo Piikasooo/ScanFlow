@@ -1,0 +1,119 @@
+{
+  "name": "StatFlow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "get-stats",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a6687991-f6ff-40b3-8504-6332aee0cefc",
+      "name": "Webhook Stat",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -64
+      ],
+      "webhookId": "c8be9de5-592e-4466-a5db-39f972c2137a"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  c.name AS category,\n  SUM(ri.total) AS total\nFROM receipt_items ri\nJOIN receipts r ON ri.receipt_id = r.id\nJOIN categories c ON ri.category_id = c.id\nWHERE \n  -- Вибираємо витрати всієї сім'ї користувача\n  r.family_id = (SELECT family_id FROM users WHERE telegram_id = CAST($1 AS BIGINT))\n  -- Фільтр на поточний місяць\n  AND date_trunc('month', r.date) = date_trunc('month', CURRENT_DATE)\nGROUP BY c.name\nORDER BY total DESC;",
+        "options": {
+          "queryReplacement": "={{ $json.query.chat_id }}"
+        }
+      },
+      "id": "5996edf1-68fb-49bd-a290-5edaada1e56e",
+      "name": "Get Monthly Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        32,
+        -64
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Отримуємо дані з бази\nconst rows = items.map(item => item.json);\n\n// ВИПРАВЛЕННЯ: Додали перевірку !rows[0].category, бо при Always Output Data приходить пустий об'єкт {}\nif (rows.length === 0 || !rows[0].category) {\n  return {\n    json: {\n      text_report: \"🤷‍♂️ Цього місяця витрат ще не було.\",\n      image_url: null\n    }\n  };\n}\n\n// 2. Готуємо дані для графіку\nconst labels = rows.map(r => r.category);\nconst data = rows.map(r => r.total);\nconst totalSum = data.reduce((a, b) => parseFloat(a) + parseFloat(b), 0).toFixed(2);\n\n// 3. Формуємо текстовий звіт\nlet textReport = `📊 **Витрати за цей місяць:**\\n\\n`;\nrows.forEach(r => {\n  textReport += `▫️ ${r.category}: ${parseFloat(r.total).toFixed(2)}\\n`;\n});\ntextReport += `\\n💰 **Всього: ${totalSum}**`;\n\n// 4. Формуємо QuickChart URL\nconst chartConfig = {\n  type: 'doughnut',\n  data: {\n    labels: labels,\n    datasets: [{\n      data: data,\n      backgroundColor: [\n        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#76A346'\n      ]\n    }]\n  },\n  options: {\n    plugins: {\n      datalabels: {\n        display: true,\n        color: 'white',\n        font: { weight: 'bold' }\n      },\n      doughnutlabel: {\n        labels: [\n          { text: totalSum, font: { size: 20 } },\n          { text: 'Total', font: { size: 10 } }\n        ]\n      }\n    }\n  }\n};\n\nconst chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}`;\n\nreturn {\n  json: {\n    text_report: textReport,\n    image_url: chartUrl\n  }\n};"
+      },
+      "id": "06e749b7-b9bb-486a-9732-b344cffe1e3e",
+      "name": "Format Data & Chart",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "af935dca-ddec-46f3-983e-fdc61af0091e",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        -64
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Stat": {
+      "main": [
+        [
+          {
+            "node": "Get Monthly Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Monthly Stats": {
+      "main": [
+        [
+          {
+            "node": "Format Data & Chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Data & Chart": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4d8474d8-2ce4-4972-89a5-88f78d1b4932",
+  "meta": {
+    "instanceId": "004c26c8f91c40ef114f59a422a35b9672eb4e9a19bb1f9f188e83a3891a08ed"
+  },
+  "id": "XVDbrB91PB0oTtOy",
+  "tags": []
+}

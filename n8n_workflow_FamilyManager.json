@@ -1,0 +1,430 @@
+{
+  "name": "FamilyManager",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "family-action",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        112
+      ],
+      "id": "dce8de61-1192-4925-9b68-8cd22690c2c8",
+      "name": "Webhook Family",
+      "webhookId": "b1003a26-56d8-454c-913e-e221a559c925"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "d8f27a0a-e755-4b76-82cc-e0f139dfdd24",
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "get_info",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "dfe44bee-bbd8-4251-8957-ebcb2e3a1931",
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "create_invite",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "2d349314-37c6-4dd7-86fd-ec3c3f696005",
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "join_family",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "ff9164d9-cf41-4064-95cd-326d73b4eba9",
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "leave_family",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -576,
+        112
+      ],
+      "id": "b6996693-4d5a-4dbf-aaee-2587da05e85c",
+      "name": "Switch Action"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT \n  f.name as family_name, \n  u.first_name\nFROM users u\nJOIN families f ON u.family_id = f.id\nWHERE f.id = (SELECT family_id FROM users WHERE telegram_id = CAST($1 AS BIGINT));",
+        "options": {
+          "queryReplacement": "={{ $json.body.chat_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -288,
+        -96
+      ],
+      "id": "5b22a31d-c30e-4818-a87e-31480d216920",
+      "name": "Get Info",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO invitations (family_id, inviter_id)\nSELECT family_id, telegram_id\nFROM users \nWHERE telegram_id = CAST($1 AS BIGINT)\nRETURNING code;",
+        "options": {
+          "queryReplacement": "={{ $json.body.chat_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -288,
+        112
+      ],
+      "id": "6aad85ee-23d4-4193-ba31-b9c237e41e8d",
+      "name": "Create Invite",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH valid_invite AS (\n   UPDATE invitations \n   SET is_used = TRUE \n   WHERE code = CAST($1 AS UUID) \n     AND is_used = FALSE \n     AND expires_at > NOW()\n   RETURNING family_id\n)\nUPDATE users\nSET family_id = (SELECT family_id FROM valid_invite)\nWHERE telegram_id = CAST($2 AS BIGINT)\nAND EXISTS (SELECT 1 FROM valid_invite) -- Оновлюємо тільки якщо інвайт був валідний\nRETURNING family_id;",
+        "options": {
+          "queryReplacement": "={{ $json.body.invite_code }},{{ $json.body.chat_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -288,
+        304
+      ],
+      "id": "ac114711-4e92-46d8-9c64-4122e7bc35b3",
+      "name": "Join Family",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = items.map(i => i.json);\nconst familyName = rows[0] ? rows[0].family_name : 'Невідомо';\nconst members = rows.map(r => r.first_name).join(', ');\n\nreturn { json: { message: `🏠 *Ваша сім'я:* ${familyName}\\n👥 *Учасники:* ${members}` } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -96
+      ],
+      "id": "23e51df9-71f4-405b-91cf-77dd4ff106c5",
+      "name": "Format Info"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        112
+      ],
+      "id": "9b9334cc-4678-418f-a953-08f20c5aa77d",
+      "name": "Respond"
+    },
+    {
+      "parameters": {
+        "jsCode": "const code = items[0].json.code;\nreturn { json: { invite_code: code } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        112
+      ],
+      "id": "446d0893-a468-45ac-8e22-b539e7091bfe",
+      "name": "Format Invite"
+    },
+    {
+      "parameters": {
+        "jsCode": "if (items.length === 0 || !items[0].json.family_id) {\n  return { json: { status: 'error', message: '❌ Код невірний або застарів.' } };\n}\nreturn { json: { status: 'success', message: '✅ Ви успішно приєдналися до нової сім\\'ї!' } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        304
+      ],
+      "id": "c1cbea9c-6136-470a-bf81-c2e511b90829",
+      "name": "Format Join"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=WITH new_fam AS (\n  INSERT INTO families (name) VALUES ('Сім''я ' || $2) RETURNING id\n)\nUPDATE users \nSET family_id = (SELECT id FROM new_fam)\nWHERE telegram_id = CAST($1 AS BIGINT)\nRETURNING (SELECT id FROM new_fam);",
+        "options": {
+          "queryReplacement": "={{ $json.body.chat_id }},{{ $json.body.user_name }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -288,
+        512
+      ],
+      "id": "d6cb80bf-3d40-42e9-b207-38b517e4e1e2",
+      "name": "Leave Family",
+      "credentials": {
+        "postgres": {
+          "id": "4V2m0lDO2DfdlKuS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { message: '🚪 Ви вийшли з сім\\'ї і створили нову власну.' } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        512
+      ],
+      "id": "312dbc10-5ffd-4819-be57-c88f3783f5b8",
+      "name": "Format Leave"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Family": {
+      "main": [
+        [
+          {
+            "node": "Switch Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Action": {
+      "main": [
+        [
+          {
+            "node": "Get Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Invite",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Join Family",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leave Family",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Info": {
+      "main": [
+        [
+          {
+            "node": "Format Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Invite": {
+      "main": [
+        [
+          {
+            "node": "Format Invite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Family": {
+      "main": [
+        [
+          {
+            "node": "Format Join",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leave Family": {
+      "main": [
+        [
+          {
+            "node": "Format Leave",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Info": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Invite": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Join": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Leave": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "55da2b88-66ba-488c-88cc-e954c08da82c",
+  "meta": {
+    "instanceId": "004c26c8f91c40ef114f59a422a35b9672eb4e9a19bb1f9f188e83a3891a08ed"
+  },
+  "id": "yRwMzDAaA9JV2t9Q",
+  "tags": []
+}
