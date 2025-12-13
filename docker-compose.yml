@@ -22,6 +22,8 @@ services:
       - N8N_STAT_URL=http://n8n:5678/webhook/get-stats
       - N8N_FAMILY_URL=http://n8n:5678/webhook/family-action
       - BOT_TOKEN=${BOT_TOKEN}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - ADMIN_ID=${ADMIN_ID}
 
 volumes:
   n8n_data:
