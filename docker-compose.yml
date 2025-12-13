@@ -12,7 +12,7 @@ services:
       - n8n_data:/home/node/.n8n
 
   telegram-bot:
-    build: ..
+    build: .
     restart: always
     depends_on:
       - n8n
@@ -21,6 +21,7 @@ services:
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/scan-receipt
       - N8N_STAT_URL=http://n8n:5678/webhook/get-stats
       - N8N_FAMILY_URL=http://n8n:5678/webhook/family-action
+      - N8N_FLYER_URL=http://n8n:5678/webhook/process-flyer
       - BOT_TOKEN=${BOT_TOKEN}
       - CHANNEL_ID=${CHANNEL_ID}
       - ADMIN_ID=${ADMIN_ID}
