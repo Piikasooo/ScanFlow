@@ -12,7 +12,7 @@ services:
       - n8n_data:/home/node/.n8n
 
   telegram-bot:
-    build: .
+    build: ..
     restart: always
     depends_on:
       - n8n
