@@ -8,6 +8,10 @@ services:
       - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://localhost:5678/
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=72
     volumes:
       - n8n_data:/home/node/.n8n
 
