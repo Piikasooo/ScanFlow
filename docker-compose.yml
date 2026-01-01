@@ -37,4 +37,4 @@ services:
     restart: always
     command: tunnel run
     environment:
-      - TUNNEL_TOKEN=eyJhIjoiMGYyMGZmNDNjZGI2MWUwZmEzZTIwNjkyYzUwMWMwNjIiLCJ0IjoiMDk3ODYwYzYtZTg0Ny00N2M2LWFjZjctNmU3MjM2NWI0Zjk2IiwicyI6IllqQmxZalkxWlRrdFpqQTJaUzAwWldGbExXRmpaREV0WlRBek9ETXpZMkV5TkdGaSJ9
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
