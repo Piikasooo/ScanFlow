@@ -12,8 +12,10 @@ services:
       - CHANNEL_ID=${CHANNEL_ID}
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=72
+      - N8N_BLOCK_ENV_ACCESS_IN_EXPRESSIONS=false
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
-      - n8n_data:/home/node/.n8n
+      - ./n8n_data:/home/node/.n8n
 
   telegram-bot:
     build: .
@@ -30,5 +32,9 @@ services:
       - CHANNEL_ID=${CHANNEL_ID}
       - ADMIN_ID=${ADMIN_ID}
 
-volumes:
-  n8n_data:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiMGYyMGZmNDNjZGI2MWUwZmEzZTIwNjkyYzUwMWMwNjIiLCJ0IjoiMDk3ODYwYzYtZTg0Ny00N2M2LWFjZjctNmU3MjM2NWI0Zjk2IiwicyI6IllqQmxZalkxWlRrdFpqQTJaUzAwWldGbExXRmpaREV0WlRBek9ETXpZMkV5TkdGaSJ9
